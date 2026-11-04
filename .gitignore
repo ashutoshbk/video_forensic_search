@@ -1,0 +1,13 @@
+# data and outputs (never commit videos, crops, vectors or model weights)
+outputs/
+*.mp4
+*.avi
+*.mkv
+*.pt
+*.npz
+*.npy
+*.zip
+__pycache__/
+*.pyc
+.venv/
+.ipynb_checkpoints/

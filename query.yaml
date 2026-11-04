@@ -1,0 +1,11 @@
+# One search. Copy this file for every new query (e.g. queries/tattoo.yaml) and run:
+#   python run_search.py --query query.yaml
+text: "a person with tattoo"     # the ONLY thing you must write; Qwen plans the yes/no checks from it
+name: "tattoo"                   # results go to <run folder>/results/tattoo/
+target: "person"                 # "person" or "vehicle"
+search_start: 0                  # only detections between these video seconds are searched
+search_end: 300                  # null = until the end of the video (a longer window makes the shortlist slower)
+filter_static: false             # true = drop boxes that never move (statues); keep false for people who stand still
+filter_fixed: false              # true = drop boxes that reappear at the same place (posters); slow on long windows
+reference: null                  # path to a reference photo, e.g. "photos/person1.jpg"; null = text-only search
+require_reference: false         # true = stop if the reference photo is missing

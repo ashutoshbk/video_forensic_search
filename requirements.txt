@@ -1,0 +1,14 @@
+torch
+numpy
+opencv-python
+pillow
+tqdm
+pyyaml
+psutil
+nvidia-ml-py
+matplotlib
+ultralytics
+open_clip_torch
+transformers>=4.45
+accelerate
+# bitsandbytes   # only needed if qwen_4bit: true
