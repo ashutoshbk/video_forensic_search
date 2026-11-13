@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Forensic Search</title>
+<style>
+:root{
+  --bg:#f1f4f6; --card:#ffffff; --ink:#16212b; --mute:#6b7a88; --line:#e2e8ed;
+  --teal:#0fb5a6; --teal-2:#1aa7e0; --teal-ink:#0a8a7e;
+  --ok:#0f9d6b; --ok-bg:#e6f6ef; --warn:#b7791f; --warn-bg:#fdf3e1; --err:#c53030;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0f1519; --card:#172027; --ink:#e6edf2; --mute:#8fa1b0; --line:#25323b;
+    --teal-ink:#3fd3c4; --ok:#45d19b; --ok-bg:#12362a; --warn:#f0b955; --warn-bg:#3a2e14; --err:#ff8a8a;
+  }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.wrap{max-width:1180px;margin:0 auto;padding:24px 16px 64px}
+.eyebrow{font:11px ui-monospace,Menlo,Consolas,monospace;letter-spacing:.18em;color:var(--teal-ink);text-transform:uppercase}
+.head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+h1{margin:6px 0 20px;font-size:34px;letter-spacing:.14em;color:var(--teal);font-weight:800}
+.state{display:flex;align-items:center;gap:8px;color:var(--mute);font-size:13px;margin-top:4px}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--ok)}
+.dot.busy{background:#f0a020}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px}
+.panel{padding:18px}
+.row{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.tab{display:inline-flex;gap:8px;align-items:center;padding:8px 16px;border-radius:9px;color:#fff;font-weight:600;
+  background:linear-gradient(90deg,var(--teal),var(--teal-2));font-size:13px}
+select{padding:9px 12px;border:1px solid var(--line);border-radius:9px;background:var(--card);color:var(--ink);font:inherit;max-width:320px}
+textarea{width:100%;min-height:76px;margin:14px 0 8px;padding:14px;border:1px solid var(--line);border-radius:10px;
+  background:var(--card);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;resize:vertical}
+textarea:focus,select:focus{outline:2px solid var(--teal);outline-offset:1px}
+.hint{font-size:12px;color:var(--mute)}
+button{font:inherit;cursor:pointer}
+.btn{display:inline-flex;gap:8px;align-items:center;padding:10px 20px;border-radius:9px;border:1px solid var(--line);background:var(--card);color:var(--ink);font-weight:600}
+.btn.primary{border:0;color:#fff;background:linear-gradient(90deg,var(--teal),var(--teal-2))}
+.btn:disabled{opacity:.55;cursor:not-allowed}
+.progress{margin-top:22px;padding:34px 18px;text-align:center}
+.spin{width:52px;height:52px;margin:0 auto 14px;border-radius:50%;border:5px solid var(--line);border-top-color:var(--teal);animation:sp 1s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion: reduce){.spin{animation-duration:3s}}
+.bar{height:6px;background:var(--line);border-radius:4px;max-width:380px;margin:14px auto;overflow:hidden}
+.bar>i{display:block;height:100%;background:linear-gradient(90deg,var(--teal),var(--teal-2));transition:width .4s}
+.mono{font-family:ui-monospace,Menlo,Consolas,monospace}
+.log{font-size:12px;color:var(--mute);max-width:700px;margin:6px auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.empty{margin-top:22px;padding:42px 18px;text-align:center;color:var(--mute);border:1px dashed var(--line);border-radius:14px}
+.sect{margin:26px 0 4px;font-size:18px;font-weight:700}
+.sub{color:var(--mute);font-size:12px;margin-bottom:12px}
+.hit{display:grid;grid-template-columns:300px 1fr;overflow:hidden;margin-bottom:14px}
+@media (max-width:760px){.hit{grid-template-columns:1fr}}
+.thumb{background:#0b1116;display:flex;flex-direction:column}
+.thumb video{width:100%;aspect-ratio:16/9;display:block;background:#0b1116;object-fit:contain}
+.body{padding:14px 16px;min-width:0}
+.top{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.rank{font:600 12px ui-monospace,monospace;color:var(--teal-ink)}
+.pill{font:11px ui-monospace,monospace;border:1px solid var(--line);border-radius:6px;padding:2px 8px;color:var(--mute)}
+.when{font-size:12px;color:var(--mute)}
+.sp{flex:1}
+.badge{font-size:11px;font-weight:600;border-radius:999px;padding:3px 10px}
+.badge.ok{background:var(--ok-bg);color:var(--ok)}
+.badge.warn{background:var(--warn-bg);color:var(--warn)}
+.score{font:700 16px ui-monospace,monospace;color:var(--teal-ink)}
+.desc{margin:10px 0 8px}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{font:11px ui-monospace,monospace;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:2px 8px;color:var(--mute)}
+details{margin-top:10px;border-top:1px solid var(--line);padding-top:8px}
+summary{cursor:pointer;color:var(--mute);font-size:12px}
+table.ev{border-collapse:collapse;margin-top:8px;font-size:12px}
+table.ev td{padding:3px 18px 3px 0}
+table.ev td:first-child{color:var(--mute)}
+.fb{display:flex;gap:6px;padding:8px;background:var(--card);border-top:1px solid var(--line)}
+.fbb{flex:1;padding:7px 6px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--ink);font-weight:600;font-size:12px}
+.fbb:hover{border-color:var(--mute)}
+.fbb.good[aria-pressed="true"]{background:var(--ok-bg);color:var(--ok);border-color:var(--ok)}
+.fbb.bad[aria-pressed="true"]{background:#fde8e8;color:var(--err);border-color:var(--err)}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .fbb.bad[aria-pressed="true"]{background:#3b1c1c}}
+.hit.wrong{border-left:4px solid var(--err)}
+.hit.right{border-left:4px solid var(--ok)}
+.hist{margin-top:30px}
+.hrow{display:grid;grid-template-columns:1fr auto auto;gap:12px;align-items:center;padding:10px 14px;border-top:1px solid var(--line)}
+.hrow:first-child{border-top:0}
+.hq{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hm{font-size:12px;color:var(--mute)}
+.link{background:none;border:0;color:var(--teal-ink);font-weight:600;padding:4px 6px}
+.err{color:var(--err);font-size:13px;margin-top:10px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="head">
+    <div>
+      <div class="eyebrow">Intelligence console</div>
+      <h1>FORENSIC SEARCH</h1>
+    </div>
+    <div class="state"><span class="dot" id="dot"></span><span id="stateText">Ready to search</span></div>
+  </div>
+
+  <div class="card panel">
+    <div class="row">
+      <span class="tab">Search by Footage</span>
+      <select id="cam" aria-label="Camera"></select>
+    </div>
+    <textarea id="q" placeholder='Describe the footage to find, e.g. "a person with red cap"'></textarea>
+    <div class="row">
+      <span class="hint" id="searching">Searching All Cameras</span>
+      <span style="display:flex;gap:10px">
+        <button class="btn" id="reset">Reset</button>
+        <button class="btn primary" id="run">Run search</button>
+      </span>
+    </div>
+    <div class="err" id="err" role="alert"></div>
+  </div>
+
+  <div id="progress"></div>
+  <div id="results"></div>
+
+  <div class="hist">
+    <div class="sect">Recent searches</div>
+    <div class="sub">Every search saved on this machine. Open one to see its clips again.
+      <a class="link" href="/api/feedback.csv">Download correct / incorrect marks (CSV)</a></div>
+    <div class="card" id="history"></div>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+let job = null, timer = null;
+
+function setState(text, busy){ $("stateText").textContent = text; $("dot").className = "dot" + (busy ? " busy" : ""); }
+function f3(x){ return (x === null || x === undefined || x === "") ? "–" : Number(x).toFixed(3); }
+
+async function api(path, opts){
+  const r = await fetch(path, opts);
+  if(!r.ok){ let m = r.statusText; try{ m = (await r.json()).detail || m; }catch(e){} throw new Error(m); }
+  return r.json();
+}
+
+async function loadCameras(){
+  const cams = await api("/api/cameras");
+  const sel = $("cam");
+  const indoor = cams.filter(c => c.indoor), other = cams.filter(c => !c.indoor);
+  sel.innerHTML = `<option value="all">All Cameras (${indoor.length})</option>` +
+    (indoor.length ? `<optgroup label="Cameras">${indoor.map(c=>`<option value="${esc(c.id)}">${esc(c.label)}</option>`).join("")}</optgroup>` : "") +
+    (other.length ? `<optgroup label="Other videos">${other.map(c=>`<option value="${esc(c.id)}">${esc(c.label)}</option>`).join("")}</optgroup>` : "");
+  sel.onchange = () => $("searching").textContent = "Searching " + (sel.value === "all" ? "All Cameras" : sel.value);
+}
+
+const REASONS = {
+  confirmed: "Passed the confirm threshold on the best crop.",
+  unclear: "Some details could not be confirmed by the model. Please check by eye.",
+  "below threshold": "Score is just below the confirm threshold. Please check by eye."
+};
+
+function marks(list){
+  const g = list.filter(c => c.feedback === "correct").length, b = list.filter(c => c.feedback === "incorrect").length;
+  return (g || b) ? ` · marked: ${g} correct, ${b} incorrect` : "";
+}
+
+function card(c, i){
+  const e = c.evidence || {};
+  const ok = c.status === "confirmed";
+  const rk = String(i + 1).padStart(2, "0");
+  const reason = REASONS[c.reason] || c.reason || "";
+  return `<article class="card hit${c.feedback === "incorrect" ? " wrong" : c.feedback === "correct" ? " right" : ""}">
+    <div class="thumb"><video controls preload="metadata" src="${esc(c.url)}#t=0.1"></video>
+      <div class="fb">
+        <button class="fbb good" data-fb="correct" data-i="${i}" aria-pressed="${c.feedback === "correct"}">✓ Correct</button>
+        <button class="fbb bad" data-fb="incorrect" data-i="${i}" aria-pressed="${c.feedback === "incorrect"}">✗ Incorrect</button>
+      </div></div>
+    <div class="body">
+      <div class="top">
+        <span class="rank">${rk}</span><span class="pill">${esc(c.video)}</span>
+        <span class="when">video time ${esc(c.start)} – ${esc(c.end)} (${esc(c.seconds)} s)</span>
+        <span class="sp"></span>
+        <span class="badge ${ok ? "ok" : "warn"}">${ok ? "Verified match" : "Needs review"}</span>
+        <span class="score">${f3(c.score)}</span>
+      </div>
+      <p class="desc">${esc(reason)}</p>
+      <div class="chips">
+        <span class="chip">Strict ${f3(e.strict)}</span><span class="chip">Clip ${f3(e.clip)}</span>
+        <span class="chip">Final ${f3(e.final)}</span><span class="chip">Track ${esc(c.best_track)}</span>
+        ${e.px ? `<span class="chip">${esc(e.px)} px</span>` : ""}
+      </div>
+      <details><summary>Verification evidence</summary>
+        <table class="ev">
+          <tr><td>Strict score</td><td class="mono">${f3(e.strict)}</td><td>Raw yes/no score</td><td class="mono">${f3(e.raw)}</td></tr>
+          <tr><td>Average over crops</td><td class="mono">${f3(e.avg)}</td><td>Clip score</td><td class="mono">${f3(e.clip)}</td></tr>
+          <tr><td>Final rank score</td><td class="mono">${f3(e.final)}</td><td>Best crop size</td><td class="mono">${e.px ? esc(e.px) + " px" : "–"}</td></tr>
+          <tr><td>Best frame at</td><td class="mono">${esc(e.best_t || "–")}</td><td>Track seen</td><td class="mono">${esc(e.first || "–")} – ${esc(e.last || "–")}</td></tr>
+          <tr><td>Verdict</td><td class="mono" colspan="3">${esc(e.verdict || c.status)}</td></tr>
+        </table>
+      </details>
+    </div>
+  </article>`;
+}
+
+let shown = [], shownQuery = "", shownRunning = false;
+
+function renderResults(list, query, running){
+  shown = list; shownQuery = query; shownRunning = running;
+  if(!list.length){
+    $("results").innerHTML = running ? "" :
+      `<div class="empty">No matching clips found${query ? " for “" + esc(query) + "”" : ""}.</div>`;
+    return;
+  }
+  const n = list.filter(c => c.status === "confirmed").length;
+  $("results").innerHTML =
+    `<div class="sect">${list.length} ${list.length === 1 ? "match" : "matches"} found${running ? " so far" : ""}</div>
+     <div class="sub">${n} verified, ${list.length - n} to review. Ranked by score, highest first.
+       ${marks(list)}</div>` +
+    list.map(card).join("");
+}
+
+function renderProgress(j){
+  const total = j.videos.length, done = Math.min(j.index, total);
+  const pct = Math.max(5, Math.round(done / total * 100));
+  $("progress").innerHTML = `<div class="card progress">
+    <div class="spin"></div>
+    <div style="font-weight:700">${j.status === "queued" ? "Waiting for the GPU…" : "Searching camera " + Math.min(done + 1, total) + " of " + total}</div>
+    <div class="hint">${esc(j.current || "")}</div>
+    <div class="bar"><i style="width:${pct}%"></i></div>
+    <div class="mono hint">${j.elapsed || 0} s elapsed</div>
+    <div class="log mono">${esc(j.log || "")}</div>
+    <button class="btn" id="cancel">Cancel search</button>
+  </div>`;
+  $("cancel").onclick = () => api(`/api/jobs/${job}/cancel`, {method:"POST"}).catch(()=>{});
+}
+
+async function poll(){
+  try{
+    const j = await api("/api/jobs/" + job);
+    const running = j.status === "queued" || j.status === "running";
+    if(running){
+      renderProgress(j);
+      setState("Searching…", true);
+    }else{
+      clearInterval(timer); timer = null;
+      $("progress").innerHTML = "";
+      setState(j.status === "cancelled" ? "Search cancelled" : "Search complete", false);
+      $("run").disabled = false;
+      loadHistory();
+    }
+    renderResults(j.results, j.text, running);
+    $("err").textContent = (j.errors || []).join(" | ");
+  }catch(e){ $("err").textContent = e.message; }
+}
+
+async function run(){
+  const text = $("q").value.trim();
+  if(!text){ $("err").textContent = "Type a prompt first."; return; }
+  $("err").textContent = ""; $("results").innerHTML = "";
+  $("run").disabled = true;
+  try{
+    const r = await api("/api/search", {method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({text, cameras:[$("cam").value]})});
+    job = r.id; setState("Searching…", true);
+    poll(); timer = setInterval(poll, 1500);
+  }catch(e){ $("err").textContent = e.message; $("run").disabled = false; }
+}
+
+function reset(){
+  if(timer){ clearInterval(timer); timer = null; }
+  job = null; $("q").value = ""; $("results").innerHTML = ""; $("progress").innerHTML = "";
+  $("err").textContent = ""; $("run").disabled = false; setState("Ready to search", false);
+}
+
+async function loadHistory(){
+  const h = await api("/api/history");
+  $("history").innerHTML = h.length ? h.map((x, i) => `<div class="hrow">
+      <div><div class="hq">${esc(x.query)}</div>
+        <div class="hm">${esc(x.video)} · ${esc(x.name)} · ${new Date(x.time*1000).toLocaleString()} · ${x.confirmed} verified, ${x.review} review</div></div>
+      <button class="link" data-open="${i}">Open</button>
+      <button class="link" data-use="${i}">Use prompt</button>
+    </div>`).join("") : `<div class="hrow"><span class="hm">No searches yet.</span></div>`;
+  $("history").querySelectorAll("[data-open]").forEach(b => b.onclick = async () => {
+    const x = h[b.dataset.open];
+    try{
+      const r = await api(`/api/result?video=${encodeURIComponent(x.video)}&name=${encodeURIComponent(x.name)}`);
+      $("q").value = r.query; $("progress").innerHTML = ""; renderResults(r.results, r.query, false);
+      setState("Showing saved result", false); window.scrollTo({top: 0, behavior: "smooth"});
+    }catch(e){ $("err").textContent = e.message; }
+  });
+  $("history").querySelectorAll("[data-use]").forEach(b => b.onclick = () => {
+    $("q").value = h[b.dataset.use].query; $("q").focus(); window.scrollTo({top: 0, behavior: "smooth"});
+  });
+}
+
+$("results").addEventListener("click", async e => {
+  const b = e.target.closest("[data-fb]"); if(!b) return;
+  const c = shown[+b.dataset.i]; if(!c) return;
+  const old = c.feedback || "";
+  const verdict = old === b.dataset.fb ? "" : b.dataset.fb;   // click again to clear
+  c.feedback = verdict; renderResults(shown, shownQuery, shownRunning);
+  try{
+    await api("/api/feedback", {method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({video:c.video, name:c.name, clip:c.clip, verdict})});
+    $("err").textContent = "";
+  }catch(err){
+    c.feedback = old; renderResults(shown, shownQuery, shownRunning);
+    $("err").textContent = "Could not save the mark: " + err.message;
+  }
+});
+
+$("run").onclick = run;
+$("reset").onclick = reset;
+$("q").addEventListener("keydown", e => { if(e.key === "Enter" && (e.ctrlKey || e.metaKey)) run(); });
+loadCameras().catch(e => $("err").textContent = e.message);
+loadHistory().catch(()=>{});
+</script>
+</body>
+</html>

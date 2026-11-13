@@ -36,6 +36,8 @@ w_txt: 0.4                         # weight of the written description
 n_agg: 3                           # a track's score = mean of its best n_agg detections
 min_track_det: 2                   # ignore tracks seen in fewer detections than this
 topk: 300                          # tracks sent to the Qwen checks; raise it if the saturation check says so
+z_min: 2.0                         # send every track with score >= this
+min_tracks: 25                     # but always send at least this many (topk stays the max)
 print_rows: 30                     # rows printed in the tables
 contact_n: 40                      # crops drawn on the shortlist contact sheet
 min_judge_person_h: 100            # a person shorter than this (pixels) is "too small to judge"
@@ -67,7 +69,7 @@ qwen_max_memory: null              # e.g. {0: "20GiB", 1: "40GiB"} to limit memo
 qw: 0.7                            # weight of the Qwen score vs OpenCLIP in the RANKING score only
 match_t: 0.90                      # strict score >= this = MATCH = the only tracks that become confirmed clips
 possible_t: 0.90                   # same as match_t = no separate POSSIBLE tier
-review_min: 0.80                   # not confirmed but some crop reached this raw score = REVIEW list
+review_min: 0.60                   # not confirmed but some crop reached this raw score = REVIEW list
 
 # ---- clips ----
 include_possible: false

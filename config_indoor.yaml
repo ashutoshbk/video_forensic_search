@@ -1,0 +1,87 @@
+# ---------------------------------------------------------------------------
+# Forensic video search - settings
+# Values marked (*) change the ingest result: if you change one, the saved
+# ingest is detected as outdated and starts again from the beginning.
+# ---------------------------------------------------------------------------
+video: "videos/test_vid2.mp4"      # path to the video to ingest
+output_dir: "outputs"              # cache, crops, vectors and logs go here
+max_seconds: null                  # (*) null = whole video; e.g. 300 = first 5 minutes (good for a first test)
+device: "cuda:0"                   # "cuda:0" for GPU, "cpu" for testing only (very slow)
+
+# ---- detection and tracking ----
+yolo_weights: "yolo11m.pt"         # (*)
+yolo_imgsz: 1280                   # (*)
+stride: 5                          # (*) process every 5th frame (about 5 fps on a 25 fps video); 10 halves the time
+conf: 0.30                         # (*) YOLO confidence threshold
+ingest_classes: [0]
+min_person_h: 100                  # (*) skip people shorter than this many pixels
+min_veh_side: 80                   # (*) skip vehicles whose shorter side is below this many pixels
+crop_max_side: 512                 # (*) saved crops have their long side at most this many pixels
+jpeg_quality: 90                   # (*)
+checkpoint_every: 300              # sampled frames between progress saves (about 1 minute of work)
+
+# ---- OpenCLIP vectors (768-d for ViT-L-14) ----
+clip_arch: "ViT-L-14"
+clip_weights: "laion2b_s32b_b82k"
+emb_chunk: 8192                    # crops per saved chunk
+emb_batch: 128                     # crops per GPU batch
+num_workers: 4                     # data-loader workers (use 0 on Windows)
+
+# ===========================================================================
+# SEARCH settings (used by run_search.py; the query itself is in query.yaml)
+# ===========================================================================
+# ---- shortlist ----
+w_img: 0.6                         # weight of the reference-photo similarity (ignored without a photo)
+w_txt: 0.4                         # weight of the written description
+n_agg: 3                           # a track's score = mean of its best n_agg detections
+min_track_det: 2                   # ignore tracks seen in fewer detections than this
+topk: 100
+z_min: 2.0
+min_tracks: 20
+print_rows: 30                     # rows printed in the tables
+contact_n: 40                      # crops drawn on the shortlist contact sheet
+min_judge_person_h: 100            # a person shorter than this (pixels) is "too small to judge"
+min_judge_veh_side: 80             # a vehicle whose shorter side is below this is "too small to judge"
+dedup_sec: 2.0                     # same object split into two tracks: keep one (time gap ...
+dedup_iou: 0.30                    # ... and box overlap)
+# filters used when filter_static / filter_fixed are on in the query
+static_rel: 0.03
+min_det_static: 4
+edge_px: 4
+edge_aspect: 0.30
+fixed_iou: 0.85
+fixed_dt: 2.0
+fixed_min: 6
+# ---- best crops: the crops Qwen looks at are chosen by size + sharpness ----
+n_crops: 5                         # crops per track that Qwen checks
+crop_mode: "quality"               # "quality" (size + sharpness) or "clip" (3 best OpenCLIP detections)
+cand_per_track: 40
+min_crop_gap_s: 0.5
+w_size: 0.5
+w_sharp: 0.5
+
+# ---- Qwen2-VL ----
+qwen_model: "Qwen/Qwen2-VL-7B-Instruct"
+qwen_4bit: false                   # true only if you have ONE small GPU (needs bitsandbytes)
+qwen_max_memory: null              # e.g. {0: "20GiB", 1: "40GiB"} to limit memory per GPU; null = automatic
+
+# ---- decision ----
+qw: 0.7                            # weight of the Qwen score vs OpenCLIP in the RANKING score only
+match_t: 0.90                      # strict score >= this = MATCH = the only tracks that become confirmed clips
+possible_t: 0.90                   # same as match_t = no separate POSSIBLE tier
+review_min: 0.60
+
+# ---- clips ----
+include_possible: false
+pad_s: 1.5                         # seconds added before and after every clip
+merge_gap_s: 2.0                   # tracks that overlap or are closer than this become one clip
+clip_max_width: 960                # clips are scaled down to this width (null = original size)
+draw_boxes: true                   # red box + track id on the matching person
+trim_to_confirmed: true            # clip covers only the time around the crops that passed
+conf_pad_s: 3.0
+draw_all_tracks: false             # false = box only the best track of a clip
+make_review: true                  # also cut a separate review folder from the REVIEW tracks
+review_max_clips: 15
+review_max_s: 10.0
+z_pad: 0.75
+abs_floor_person: 0.20

@@ -13,7 +13,7 @@ DEFAULTS = dict(
     clip_arch="ViT-L-14", clip_weights="laion2b_s32b_b82k",
     emb_chunk=8192, emb_batch=128, num_workers=min(4, os.cpu_count() or 2),
     # ---- search: shortlist ----
-    w_img=0.6, w_txt=0.4, n_agg=3, min_track_det=2, topk=300, print_rows=30, contact_n=40,
+    w_img=0.6, w_txt=0.4, n_agg=3, min_track_det=2, topk=300, z_min=None, min_tracks=25, z_pad=0.5, abs_floor=None, abs_floor_person=None, abs_floor_vehicle=None, print_rows=30, contact_n=40,
     static_rel=0.03, min_det_static=4, edge_px=4, edge_aspect=0.30,
     fixed_iou=0.85, fixed_dt=2.0, fixed_min=6, dedup_sec=2.0, dedup_iou=0.30,
     min_judge_person_h=100, min_judge_veh_side=80,
@@ -22,7 +22,7 @@ DEFAULTS = dict(
     qwen_model="Qwen/Qwen2-VL-7B-Instruct", qwen_4bit=False, qwen_max_memory=None,
     qwen_min_pixels=128 * 28 * 28, qwen_max_pixels=512 * 28 * 28,
     # ---- search: decision ----
-    qw=0.7, match_t=0.90, possible_t=0.90, review_min=0.80,
+    qw=0.7, match_t=0.90, possible_t=0.90, review_min=0.60,
     # ---- search: clips ----
     include_possible=False, pad_s=1.5, merge_gap_s=2.0, clip_max_width=960, draw_boxes=True,
     trim_to_confirmed=True, conf_pad_s=3.0, draw_all_tracks=False,

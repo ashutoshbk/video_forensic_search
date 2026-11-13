@@ -177,7 +177,8 @@ def shortlist(cache, cfg, q, clip, ref_pil, ref_vec, resq):
         top = use[:cfg["n_agg"]]
         ts = [rows[k]["t"] for k in ks]
         tracks.append(dict(key=key, best=use[0], top=top, score=float(np.mean([score[k] for k in top])),
-                           t0=min(ts), t1=max(ts), n=len(ks), small=small))
+                           t0=min(ts), t1=max(ts), n=len(ks), small=small,
+                           txt_max=float(max(txt_raw[k] for k in ks))))
     tracks.sort(key=lambda d: (d["small"], -d["score"]))      # judged tracks first, small ones after them
     if not tracks:
         raise RuntimeError("No track has enough detections (min_track_det).")
@@ -189,7 +190,43 @@ def shortlist(cache, cfg, q, clip, ref_pil, ref_vec, resq):
                for q_ in TOP):
             continue
         TOP.append(tr)
-    TOP = TOP[:cfg["topk"]]
+    # hybrid selection: every track with score >= z_min, at least min_tracks, at most topk
+    z_min = cfg.get("z_min")
+    n_all = len(TOP)
+    if z_min is None:                                         # old behaviour if the yaml has no z_min
+        TOP = TOP[:cfg["topk"]]
+    else:
+        min_tracks = cfg.get("min_tracks", 25)
+        floor_v = cfg.get("abs_floor_" + target, cfg.get("abs_floor"))
+        if floor_v is None:
+            floor_v = cfg.get("abs_floor")
+        ok = lambda tr: floor_v is None or tr["txt_max"] >= floor_v     # floor applies to both gates
+        keep = [i for i, tr in enumerate(TOP) if tr["score"] >= z_min and ok(tr)]
+        if len(keep) < min_tracks:                            # pad with the next best, in ranked order
+            ks = set(keep)
+            z_pad = cfg.get("z_pad", 0.5)                        # padding only from tracks scoring at least this
+            keep += [i for i in range(n_all) if i not in ks and TOP[i]["score"] >= z_pad and ok(TOP[i])][:min_tracks - len(keep)]
+            keep.sort()
+        TOP = [TOP[i] for i in keep[:cfg["topk"]]]
+        print(f"[threshold] z_min={z_min}: sent {len(TOP)} of {n_all} de-duplicated tracks (min_tracks={min_tracks}, topk={cfg['topk']})")
+
+    # all filtered tracks -> csv for calibration (sent = went to Qwen)
+    import csv
+    sent_keys = {str(t["key"]) for t in TOP}
+    with open(os.path.join(resq, "shortlist_scores.csv"), "w", newline="") as fcsv:
+        w = csv.writer(fcsv)
+        w.writerow(["track", "rank", "score", "txt_max", "sent"])
+        for i, t in enumerate(tracks, 1):
+            w.writerow([t["key"], i, round(t["score"], 3), round(t["txt_max"], 4), str(t["key"]) in sent_keys])
+
+    # absolute floor on raw OpenCLIP similarity (None = off). Empty result is allowed: the video is skipped.
+    floor = cfg.get("abs_floor_" + target, cfg.get("abs_floor"))
+    if floor is None:
+        floor = cfg.get("abs_floor")
+    if floor is not None:
+        kept = [t for t in TOP if t["txt_max"] >= floor]
+        print(f"[floor] abs_floor={floor}: {len(kept)} of {len(TOP)} tracks pass")
+        TOP = kept
 
     # ---- best crops: chosen by SIZE + SHARPNESS, not only by the OpenCLIP score ----
     n_crops = cfg["n_crops"]
@@ -230,7 +267,7 @@ def shortlist(cache, cfg, q, clip, ref_pil, ref_vec, resq):
     print(f"[best crops] mode={cfg['crop_mode']}: {sum(len(t['crops']) for t in TOP)} crops for {len(TOP)} tracks")
 
     print("\nrank  track  class       seen (first-last)  n_det  best_t  size   score   z_img  z_txt  img_cos  judged?")
-    print(f"tracks passing the filters in this window: {len(tracks)}; shortlisted: {len(TOP)} (lowest shortlisted score {TOP[-1]['score']:+.2f})")
+    print(f"tracks passing the filters in this window: {len(tracks)}; shortlisted: {len(TOP)} (lowest shortlisted score {(TOP[-1]['score'] if TOP else float('nan')):+.2f})")
     for rank, tr in enumerate(TOP[:cfg["print_rows"]], 1):
         k = tr["best"]
         print(f"{rank:>4}  {str(tr['key']):>5}  {rows[k]['cname']:<10}  {mmss(tr['t0'])}-{mmss(tr['t1'])}        {tr['n']:>4}  {mmss(rows[k]['t'])}  "
