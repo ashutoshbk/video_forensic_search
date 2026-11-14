@@ -88,8 +88,8 @@ def cut_all(cache, cfg, q, resq, TOP, QRES, final):
                 dets[r["track"]].append(r)
         for k in dets:
             dets[k].sort(key=lambda r: r["frame"])
-        cap = cv2.VideoCapture(cache.video)
-        for ci, c in enumerate(tqdm(clips, desc=f"cutting {prefix} clips", unit="clip", dynamic_ncols=True)):
+        def cut_one(ci, c):
+            cap = cv2.VideoCapture(cache.video)
             a_, b_ = max(0.0, c["start"] - pad_s), min(dur_s, c["end"] + pad_s)
             f0, f1 = int(a_ * fps), int(b_ * fps)
             name = f"{prefix}_{ci + 1:03d}_{c['best']:.2f}_{tag(c['start'])}-{tag(c['end'])}.mp4"   # prefix_number_bestScore_start-end
@@ -115,10 +115,15 @@ def cut_all(cache, cfg, q, resq, TOP, QRES, final):
                     fr = cv2.resize(fr, (ow, oh), interpolation=cv2.INTER_AREA)
                 vw.write(fr)
             vw.release()
-            out["index"].append(dict(clip=name, start=mmss(c["start"]), end=mmss(c["end"]), seconds=round(c["end"] - c["start"], 1),
+            cap.release()
+            return dict(clip=name, start=mmss(c["start"]), end=mmss(c["end"]), seconds=round(c["end"] - c["start"], 1),
                                      tracks=" ".join(str(k) for k in c["tracks"]), best_track=c["best_key"],
-                                     best_score=round(c["best"], 2), reason=reason(c["best_key"])))
-        cap.release()
+                                     best_score=round(c["best"], 2), reason=reason(c["best_key"]))
+
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=cfg.get("clip_workers", 4)) as ex:
+            out["index"] = list(tqdm(ex.map(lambda a: cut_one(*a), list(enumerate(clips))), total=len(clips),
+                                     desc=f"cutting {prefix} clips", unit="clip", dynamic_ncols=True))
         with open(os.path.join(outdir, "clips_index.csv"), "w", newline="") as f:
             w = csv.DictWriter(f, fieldnames=list(out["index"][0]))
             w.writeheader()

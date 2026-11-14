@@ -1,6 +1,7 @@
 """Stage 2c - final decision per track: MATCH / POSSIBLE / REVIEW / insufficient evidence."""
 import json
 import os
+import time
 
 import cv2
 import numpy as np
@@ -58,13 +59,15 @@ def decide(cache, cfg, q, resq, TOP, QRES):
              else "NOT near 0 -> matches may exist outside the shortlist: raise topk and search again."))
 
     # boxed frames of the final top 6 (best frame per track, read from the original video)
+    _t = time.perf_counter()
     top_final = [dict(best=x["best_k"]) for x in final]
-    save_hit_frames(cache, resq, top_final, "final", scores_txt=[f"{x['final']:.2f} {x['verdict'][:5]}" for x in final])
+    if cfg.get("save_debug_images", False): save_hit_frames(cache, resq, top_final, "final", scores_txt=[f"{x['final']:.2f} {x['verdict'][:5]}" for x in final])
+    print(f"[dbg] save_hit_frames {time.perf_counter()-_t:.2f}s", flush=True); _t = time.perf_counter()
 
     # the crops Qwen actually judged for the top 6 tracks, so you can see what "best crops" picked
     n_crops = cfg["n_crops"]
     show = final[:6]
-    if show:
+    if show and cfg.get("save_debug_images", False):
         fig, axes = plt.subplots(len(show), n_crops, figsize=(2.2 * n_crops, 3.4 * len(show)), squeeze=False)
         for ax in axes.ravel():
             ax.axis("off")
@@ -78,6 +81,7 @@ def decide(cache, cfg, q, resq, TOP, QRES):
         plt.tight_layout()
         plt.savefig(os.path.join(resq, "best_crops_top6.png"), dpi=100)
         plt.close(fig)
+    print(f"[dbg] best_crops_png {time.perf_counter()-_t:.2f}s", flush=True)
 
     n_match = sum(1 for x in final if x["verdict"] == "MATCH")
     n_poss = sum(1 for x in final if x["verdict"] == "POSSIBLE")

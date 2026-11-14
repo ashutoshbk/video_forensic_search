@@ -273,28 +273,29 @@ def shortlist(cache, cfg, q, clip, ref_pil, ref_vec, resq):
         print(f"{rank:>4}  {str(tr['key']):>5}  {rows[k]['cname']:<10}  {mmss(tr['t0'])}-{mmss(tr['t1'])}        {tr['n']:>4}  {mmss(rows[k]['t'])}  "
               f"{int(size_px(rows, k)):>4}  {tr['score']:+.2f}  {z_img[k]:+.2f}  {z_txt[k]:+.2f}  {img_raw[k]:.3f}  {'too small' if tr['small'] else 'yes'}")
 
-    # contact sheet: reference photo first, then the best crop of each ranked track
-    show = TOP[:cfg["contact_n"]]
-    n = len(show) + (1 if ref_pil is not None else 0)
-    cols = 10
-    nrows = max(1, -(-n // cols))
-    fig, axes = plt.subplots(nrows, cols, figsize=(2.4 * cols, 4.0 * nrows), squeeze=False)
-    axes = axes.ravel()
-    for ax in axes:
-        ax.axis("off")
-    j0 = 0
-    if ref_pil is not None:
-        axes[0].imshow(ref_pil)
-        axes[0].set_title("REFERENCE", fontsize=8)
-        j0 = 1
-    for j, tr in enumerate(show):
-        r = rows[tr["best"]]
-        im = cv2.imread(os.path.join(cache.crops, f"{r['id']:06d}_f.jpg"))
-        if im is not None:
-            axes[j + j0].imshow(cv2.cvtColor(im, cv2.COLOR_BGR2RGB))
-        axes[j + j0].set_title(f"#{j + 1} {r['cname']} trk {tr['key']}\n{mmss(r['t'])}  {tr['score']:+.1f}", fontsize=8)
-    plt.tight_layout()
-    plt.savefig(os.path.join(resq, "shortlist_crops.png"), dpi=110)
-    plt.close(fig)
-    save_hit_frames(cache, resq, TOP, "clip")
+    if cfg.get("save_debug_images", False):
+        # contact sheet: reference photo first, then the best crop of each ranked track
+        show = TOP[:cfg["contact_n"]]
+        n = len(show) + (1 if ref_pil is not None else 0)
+        cols = 10
+        nrows = max(1, -(-n // cols))
+        fig, axes = plt.subplots(nrows, cols, figsize=(2.4 * cols, 4.0 * nrows), squeeze=False)
+        axes = axes.ravel()
+        for ax in axes:
+            ax.axis("off")
+        j0 = 0
+        if ref_pil is not None:
+            axes[0].imshow(ref_pil)
+            axes[0].set_title("REFERENCE", fontsize=8)
+            j0 = 1
+        for j, tr in enumerate(show):
+            r = rows[tr["best"]]
+            im = cv2.imread(os.path.join(cache.crops, f"{r['id']:06d}_f.jpg"))
+            if im is not None:
+                axes[j + j0].imshow(cv2.cvtColor(im, cv2.COLOR_BGR2RGB))
+            axes[j + j0].set_title(f"#{j + 1} {r['cname']} trk {tr['key']}\n{mmss(r['t'])}  {tr['score']:+.1f}", fontsize=8)
+        plt.tight_layout()
+        plt.savefig(os.path.join(resq, "shortlist_crops.png"), dpi=110)
+        plt.close(fig)
+        save_hit_frames(cache, resq, TOP, "clip")
     return dict(TOP=TOP, groups=groups)

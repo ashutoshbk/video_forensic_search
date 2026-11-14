@@ -77,6 +77,44 @@ class Qwen:
         pr = torch.softmax(l, 0).tolist()
         return pr[0], pr[1], pr[2]
 
+    @torch.no_grad()
+    def p3_batch(self, items, bs=8):
+        """items: list of (images_or_loader, question); a loader is a function returning the image list.
+        Next batch is prepared in a background thread while the GPU runs the current one."""
+        from concurrent.futures import ThreadPoolExecutor
+        self.proc.tokenizer.padding_side = "left"
+
+        def prep(chunk):
+            texts, imgs = [], []
+            for images, q in chunk:
+                if callable(images):
+                    images = images()
+                content = [{"type": "image"} for _ in images] + [{"type": "text", "text": self._to3(q)}]
+                texts.append(self.proc.apply_chat_template([{"role": "user", "content": content}],
+                                                           tokenize=False, add_generation_prompt=True))
+                imgs.extend(images)
+            return self.proc(text=texts, images=imgs, padding=True, return_tensors="pt")
+
+        chunks = [items[i:i + bs] for i in range(0, len(items), bs)]
+        out = []
+        bar = tqdm(total=len(chunks), desc="Qwen checks", unit="batch", dynamic_ncols=True)
+        with ThreadPoolExecutor(max_workers=1) as ex:
+            nxt = ex.submit(prep, chunks[0]) if chunks else None
+            for ci in range(len(chunks)):
+                inp = nxt.result()
+                nxt = ex.submit(prep, chunks[ci + 1]) if ci + 1 < len(chunks) else None
+                inp = inp.to(self.model.device)
+                lg = self.model(**inp).logits[:, -1].float()
+                for j in range(lg.shape[0]):
+                    l = torch.stack([torch.logsumexp(lg[j, self.yes_ids], 0),
+                                     torch.logsumexp(lg[j, self.no_ids], 0),
+                                     torch.logsumexp(lg[j, self.unc_ids], 0)])
+                    pr = torch.softmax(l, 0).tolist()
+                    out.append((pr[0], pr[1], pr[2]))
+                bar.update(1)
+        bar.close()
+        return out
+
 
 def plan_query(qwen, desc, target):
     """Qwen writes the yes/no checks from the user's one-line description (only details really written in it).
@@ -157,9 +195,16 @@ def plan_query(qwen, desc, target):
     return attr, raw, note
 
 
+_PLAN_CACHE = {}   # (query text, target) -> plan, so each query is planned once per run, not once per video
+
+
 def plan_and_save(qwen, q, resq):
     """Plan the checks for query `q`, print them, save plan.json. Returns (attr, same_question)."""
-    attr, raw, note = plan_query(qwen, q["text"], q["target"])
+    import copy
+    key = (q["text"], q["target"])
+    if key not in _PLAN_CACHE:
+        _PLAN_CACHE[key] = plan_query(qwen, q["text"], q["target"])
+    attr, raw, note = copy.deepcopy(_PLAN_CACHE[key])
     print("\n=== QUERY PLANNED BY QWEN (no negative prompts are used) ===")
     print("POS (yours)  :", q["text"])
     print("ATTR (Qwen)  :")
@@ -185,25 +230,33 @@ def check_tracks(qwen, cache, cfg, TOP, attr, same_q, ref_pil):
     print("SAME (reference photo) check:", "ON" if ref_pil is not None else "OFF (text-only)")
     t0 = time.time()
     QRES = {}
-    for tr in tqdm(TOP, desc="Qwen checks", unit="track", dynamic_ncols=True):
-        frames = []
-        for k in tr["crops"]:
-            a, un, y3, no_ = {}, {}, {}, {}
+    items, index = [], []
+    for ti, tr in enumerate(TOP):
+        for ci, k in enumerate(tr["crops"]):
             for name, question, view in attr:
-                py, pn, pu = qwen.p3([crop_img(k, view)], question)
-                y3[name], no_[name], un[name] = py, pn, pu                   # raw 3-way probabilities (used for the veto label)
-                a[name] = py / (py + pn + 1e-9)                              # yes-vs-no score
+                items.append(((lambda k=k, view=view: [crop_img(k, view)]), question)); index.append((ti, ci, name))
             if ref_pil is not None:
-                sp = qwen.p3([ref_pil, crop_img(k, "f")], same_q)
-                same = sp[0] / (sp[0] + sp[1] + 1e-9)
-            else:
-                same = None
+                items.append(((lambda k=k: [ref_pil, crop_img(k, "f")]), same_q)); index.append((ti, ci, "__same__"))
+    res = qwen.p3_batch(items, bs=cfg.get("qwen_batch", 8))
+    per = {}
+    for (ti, ci, name), (py, pn, pu) in zip(index, res):
+        d = per.setdefault((ti, ci), dict(a={}, un={}, y3={}, no_={}, same=None))
+        if name == "__same__":
+            d["same"] = py / (py + pn + 1e-9)
+        else:
+            d["y3"][name], d["no_"][name], d["un"][name] = py, pn, pu
+            d["a"][name] = py / (py + pn + 1e-9)
+    for ti, tr in enumerate(TOP):
+        frames = []
+        for ci, k in enumerate(tr["crops"]):
+            d = per[(ti, ci)]
+            a, un, y3, no_, same = d["a"], d["un"], d["y3"], d["no_"], d["same"]
             attrs = float(np.mean(list(a.values())))
-            q_avg = 0.5 * attrs + 0.5 * same if same is not None else attrs  # averaged score (kept for reference)
-            q_min = min(list(a.values()) + ([same] if same is not None else []))   # STRICT: the weakest answer decides
+            q_avg = 0.5 * attrs + 0.5 * same if same is not None else attrs
+            q_min = min(list(a.values()) + ([same] if same is not None else []))
             lab_attr = [("yes", "no", "unclear")[int(np.argmax([y3[n_], no_[n_], un[n_]]))] for n_ in a]
-            lab = "no" if "no" in lab_attr else "unclear" if "unclear" in lab_attr else "yes"   # frame label from its weakest answer
-            qd = q_min if lab == "yes" else 0.0      # DECISION score: a crop where "unclear" (or "no") is the top answer can NOT confirm the track
+            lab = "no" if "no" in lab_attr else "unclear" if "unclear" in lab_attr else "yes"
+            qd = q_min if lab == "yes" else 0.0
             frames.append(dict(k=k, attrs=a, unclear=un, same=same, q_avg=q_avg, q=q_min, qd=qd, lab=lab))
         best = max(frames, key=lambda d: (d["qd"], d["q"]))
         QRES[tr["key"]] = dict(frames=frames, q=best["qd"], q_raw=max(d["q"] for d in frames), q_avg=best["q_avg"], best_k=best["k"],

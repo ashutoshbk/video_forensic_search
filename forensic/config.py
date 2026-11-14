@@ -20,7 +20,7 @@ DEFAULTS = dict(
     n_crops=5, crop_mode="quality", cand_per_track=40, min_crop_gap_s=0.5, w_size=0.5, w_sharp=0.5,
     # ---- search: Qwen2-VL ----
     qwen_model="Qwen/Qwen2-VL-7B-Instruct", qwen_4bit=False, qwen_max_memory=None,
-    qwen_min_pixels=128 * 28 * 28, qwen_max_pixels=512 * 28 * 28,
+    qwen_min_pixels=128 * 28 * 28, qwen_max_pixels=512 * 28 * 28, qwen_batch=16,
     # ---- search: decision ----
     qw=0.7, match_t=0.90, possible_t=0.90, review_min=0.60,
     # ---- search: clips ----

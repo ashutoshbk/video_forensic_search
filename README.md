@@ -243,3 +243,9 @@ video_forensic_search/
 - To test quickly, use `--max-seconds 300` and `ingest_classes: [0]`.
 - If the saturation check in the search output says the shortlist is too small, raise `topk` or lower `z_min`.
 - On Windows, set `num_workers: 0` in `config.yaml` if the data loader gives errors.
+
+## Speed settings (2026-11-14)
+
+- `save_debug_images` (default `false`): when `true`, the search also writes the debug pictures `shortlist_crops.png`, `final_frames.png`, `clip_frames.png` and `best_crops_top6.png`. Off by default because they cost about 5 s per video and nothing reads them.
+- `clip_workers` (default `4`): how many result clips are cut in parallel.
+- Measured on one query over 12 videos: 258 s before these changes, 151 s after (decision, shortlist and clips stages cut; Qwen checks unchanged at about 117 s and GPU-bound).
